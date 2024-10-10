@@ -188,6 +188,14 @@ class MainWindow(QMainWindow):
         treeview_layout.addLayout(treeview_input_layout)
         treeview_group.setLayout(treeview_layout)
 
+        # Input fields for Find and Replace
+        self.find_input = QLineEdit()
+        self.replace_input = QLineEdit()
+
+        # Labels for the inputs
+        find_label = QLabel("Find:")
+        replace_label = QLabel("Replace:")
+        
         # Columns GroupBox
         columns_group = QGroupBox("Excel Columns")
         columns_layout_v = QVBoxLayout()
@@ -202,7 +210,7 @@ class MainWindow(QMainWindow):
         excel_input_layout.addWidget(self.input_path_main_excel_file)
         excel_input_layout.addWidget(self.button_browse_main_excel_file)
 
-        self.button_merge = QPushButton("Merge")
+        self.button_merge = QPushButton("Merge and Apply Replacements")
         self.button_merge.clicked.connect(lambda: self.start_merging_data(self.input_path_main_excel_file.text(), self.get_listbox_items()))
 
         # Main Excel Widgets
@@ -328,7 +336,6 @@ class MainWindow(QMainWindow):
             pass
         
     def browse_path_to_main_excel_file(self):
-        
         options = QFileDialog.Options()
         
         file, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
@@ -336,9 +343,12 @@ class MainWindow(QMainWindow):
             self.input_path_main_excel_file.setText(file)
         
     def get_listbox_items(self):
-        # Directly access the items_list from the DraggableListWidget instance
+        # Directly access the items_list attribute from the DraggableListWidget instance
         items = self.listbox.items_list
-        return items
+        if items:
+            return items
+        else:
+            None
 
     def initialize_theme(self, theme_file):
         try:
@@ -352,8 +362,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Theme load error", f"Failed to load theme: {str(ex)}")
             
     # Methods for Loading Columns from Excel Files
-    
-        # Load all Columns from the Main Excel Files which the values will be merged to
+    # Load all Columns from the Main Excel Files which the values will be merged to
     def load_main_excel_columns(self):
         try:
             options = QFileDialog.Options()
@@ -387,7 +396,7 @@ class MainWindow(QMainWindow):
         except Exception as ex:
             QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
         
-    def start_merging_data(self, main_excel_file_path, list_of_excel_files_to_merge):
+    def start_merging_data(self, main_excel_file_path=None, list_of_excel_files_to_merge=None):
         """
         Create Two Inputs where the columns get loaded, in one is the value of the excel file to merge and the second input is with what to replace the value from the first column
         Compare two excels on the same column value - they need to be 1:1 or it won't work I think?
@@ -402,43 +411,45 @@ class MainWindow(QMainWindow):
             ValueError: _description_
         """
         try:
-            if self.listbox.count() > 0:
-                if os.path.isfile(main_excel_file_path):
-                    main_df = pd.read_excel(main_excel_file_path)
+            if self.listbox.count() > 0 and os.path.isfile(main_excel_file_path):
+                main_df = pd.read_excel(main_excel_file_path)
 
-                    if "Profile" not in main_df.columns:
-                        raise ValueError("Main file must have a 'Profile' column.")
+                # Get selected key columns
+                main_key = self.main_excel_column_combobox.currentText()
+                other_key = self.to_merge_excel_column_combobox.currentText()
+                #//TODO FInish Code --- Check logic_merging.py
+                if not main_key or not other_key:
+                    QMessageBox.warning(self, "Warning", "Please select a valid key column from both files!")
+                    return
 
-                    for excel_file in list_of_excel_files_to_merge: 
-                        excel_file_df = pd.read_excel(excel_file)
+                for excel_file in list_of_excel_files_to_merge: 
+                    excel_file_df = pd.read_excel(excel_file)
 
-                        # Ensure 'Profile' and the value column exist in the month file
-                        if 'Profile' not in excel_file_df.columns:
-                            raise ValueError(f"File {excel_file} must have a 'Profile' column")
-                        if 'Value' not in excel_file_df.columns:  # Assuming 'value' is the column with 1 or 0
-                            raise ValueError(f"File {excel_file} must have a 'Value' column (1 or 0)")
+                    # Ensure 'Profile' and the value column exist in the month file
+                    if 'Profile' not in excel_file_df.columns:
+                        raise ValueError(f"File {excel_file} must have a 'Profile' column")
+                    if 'Value' not in excel_file_df.columns:  # Assuming 'value' is the column with 1 or 0
+                        raise ValueError(f"File {excel_file} must have a 'Value' column (1 or 0)")
 
-                        excel_filename = Path(excel_file).stem
-                        print(excel_filename)
+                    excel_filename = Path(excel_file).stem
+                    print(excel_filename)
 
-                        # Merge the main file with the current month file on 'Profile'
-                        merged_df = main_df.merge(excel_file_df[['Profile', 'Value']], on='Profile', how='left')
+                    # Merge the main file with the current month file on 'Profile'
+                    merged_df = main_df.merge(excel_file_df[['Profile', 'Value']], on='Profile', how='left')
 
-                        # Replace the 1/0 values with 'X' and '-' and fill NaN with '?'
-                        merged_df[excel_filename] = merged_df['Value'].apply(lambda x: 'x' if x == 1 else '-')
-                        merged_df.fillna({excel_filename: "?"}, inplace=True)
+                    # Replace the 1/0 values with 'X' and '-' and fill NaN with '?'
+                    merged_df[excel_filename] = merged_df['Value'].apply(lambda x: 'x' if x == 1 else '-')
+                    merged_df.fillna({excel_filename: "?"}, inplace=True)
 
-                        # Drop the temporary 'Value' column after merging
-                        main_df = merged_df.drop(columns=['Value'])
+                    # Drop the temporary 'Value' column after merging
+                    main_df = merged_df.drop(columns=['Value'])
 
-                    updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
-                    main_df.to_excel(updated_file_path, index=False)
+                updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
+                main_df.to_excel(updated_file_path, index=False)
 
-                    QMessageBox.information(self, "Merging Finished", f"Updated file saved as: {updated_file_path}")
-                else:
-                    QMessageBox.information(self, "No Excel File", "No excel file selected.")
+                QMessageBox.information(self, "Merging Finished", f"Updated file saved as: {updated_file_path}")
             else:
-                QMessageBox.information(self, "ListBox is Empty", "ListBox does not contain any excel files for merging.")
+                 QMessageBox.information(self, "No Excel File", "No excel files selected.")
                 
         except Exception as ex:
             message = f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}"
