@@ -187,20 +187,13 @@ class MainWindow(QMainWindow):
         treeview_input_layout.addWidget(self.button_browse_new_filesystem)
         treeview_layout.addLayout(treeview_input_layout)
         treeview_group.setLayout(treeview_layout)
-
-        # Input fields for Find and Replace
-        self.find_input = QLineEdit()
-        self.replace_input = QLineEdit()
-
-        # Labels for the inputs
-        find_label = QLabel("Find:")
-        replace_label = QLabel("Replace:")
         
         # Columns GroupBox
         columns_group = QGroupBox("Excel Columns")
         columns_layout_v = QVBoxLayout()
         columns_layout = QHBoxLayout()
         columns_layout_to_merge = QHBoxLayout()
+        find_and_replace_layout = QHBoxLayout()
         excel_input_layout = QHBoxLayout()
 
         self.input_path_main_excel_file = QLineEdit()
@@ -224,6 +217,14 @@ class MainWindow(QMainWindow):
         self.to_merge_excel_column_combobox = QComboBox()
         self.to_merge_load_column_button = QPushButton("Load Columns")
         self.to_merge_load_column_button.clicked.connect(self.load_to_merge_excel_columns)
+        
+        # Find and Replace
+        self.find_input = QLineEdit()
+        self.replace_input = QLineEdit()
+
+        # Labels for the inputs
+        find_label = QLabel("Find:")
+        replace_label = QLabel("Replace:")
 
         columns_layout.addWidget(self.main_excel_label)
         columns_layout.addWidget(self.main_excel_column_combobox)
@@ -232,9 +233,15 @@ class MainWindow(QMainWindow):
         columns_layout_to_merge.addWidget(self.to_merge_excel_label)
         columns_layout_to_merge.addWidget(self.to_merge_excel_column_combobox)
         columns_layout_to_merge.addWidget(self.to_merge_load_column_button)
+        
+        find_and_replace_layout.addWidget(find_label)
+        find_and_replace_layout.addWidget(self.find_input)
+        find_and_replace_layout.addWidget(replace_label)
+        find_and_replace_layout.addWidget(self.replace_input)
 
         columns_layout_v.addLayout(columns_layout)
         columns_layout_v.addLayout(columns_layout_to_merge)
+        columns_layout_v.addLayout(find_and_replace_layout)
         columns_layout_v.addLayout(excel_input_layout)
         columns_layout_v.addWidget(self.button_merge)
         columns_group.setLayout(columns_layout_v)
@@ -388,8 +395,8 @@ class MainWindow(QMainWindow):
             
             if Path(excel_file).is_file():
                 main_df = pd.read_excel(excel_file)
-                self.main_excel_column_combobox.clear()
-                self.main_excel_column_combobox.addItems(main_df.columns)
+                self.to_merge_excel_column_combobox.clear()
+                self.to_merge_excel_column_combobox.addItems(main_df.columns)
                 QMessageBox.information(self,"Columns Loaded","Successfully loaded all columns into the ComboBox.")
             else:
                 QMessageBox.information(self, "Cannot Load File","Cannot load excel file.")
@@ -418,31 +425,30 @@ class MainWindow(QMainWindow):
                 main_key = self.main_excel_column_combobox.currentText()
                 other_key = self.to_merge_excel_column_combobox.currentText()
                 #//TODO FInish Code --- Check logic_merging.py
+                
                 if not main_key or not other_key:
                     QMessageBox.warning(self, "Warning", "Please select a valid key column from both files!")
                     return
 
                 for excel_file in list_of_excel_files_to_merge: 
                     excel_file_df = pd.read_excel(excel_file)
+                    
+                    merged_df = main_df.merge(excel_file_df[other_key], left_on=main_key, right_on=other_key, how='left')
 
                     # Ensure 'Profile' and the value column exist in the month file
-                    if 'Profile' not in excel_file_df.columns:
-                        raise ValueError(f"File {excel_file} must have a 'Profile' column")
-                    if 'Value' not in excel_file_df.columns:  # Assuming 'value' is the column with 1 or 0
-                        raise ValueError(f"File {excel_file} must have a 'Value' column (1 or 0)")
+                    if other_key not in excel_file_df.columns:
+                        raise ValueError(f"File {excel_file} must have the column '{other_key}'")
 
-                    excel_filename = Path(excel_file).stem
-                    print(excel_filename)
-
-                    # Merge the main file with the current month file on 'Profile'
-                    merged_df = main_df.merge(excel_file_df[['Profile', 'Value']], on='Profile', how='left')
-
-                    # Replace the 1/0 values with 'X' and '-' and fill NaN with '?'
-                    merged_df[excel_filename] = merged_df['Value'].apply(lambda x: 'x' if x == 1 else '-')
-                    merged_df.fillna({excel_filename: "?"}, inplace=True)
+                    # Apply find and replace logic if Profile matches
+                    find_value = self.find_input.text()
+                    replace_value = self.replace_input.text()
+                    
+                    if find_value and replace_value:
+                        # Perform the replacement only if "Profile" values match
+                        merged_df.loc[merged_df[main_key] == merged_df[main_key], other_key] = merged_df[other_key].replace(find_value, replace_value)
 
                     # Drop the temporary 'Value' column after merging
-                    main_df = merged_df.drop(columns=['Value'])
+                    main_df = merged_df.drop(columns=[other_key])
 
                 updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
                 main_df.to_excel(updated_file_path, index=False)

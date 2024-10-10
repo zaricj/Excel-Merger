@@ -1,5 +1,5 @@
 QMainWindow, QWidget {
-    background-color: #1e2329;
+    background-color: #313338;
     color: #e0e0e0;
     font-family: 'Segoe UI', 'Roboto', sans-serif;
     font-size: 12px;
@@ -10,7 +10,7 @@ QLabel {
     font: bold;
 }
 QLineEdit, QTextEdit, QTreeView, QTableView, QListWidget {
-    background-color: #2a3038;
+    background-color: #232428;
     border: 1px solid #3a4149;
     border-radius: 6px;
     padding: 4px;
@@ -48,7 +48,7 @@ QGroupBox {
 }
 QPushButton {
     background-color: #4caf50;
-    color: #ffffff;
+    color: #000000;
     border-radius: 6px;
     padding: 6px 8px;
     font-weight: 500;
@@ -59,7 +59,7 @@ QComboBox {
 }
 QPushButton:hover {
     background-color: #45a049;
-    color: #000000;
+    color: #ffffff;
 }
 QPushButton:pressed {
     background-color: #3d8b40;
@@ -72,14 +72,14 @@ QTreeView::item:selected, QListWidget::item:selected {
     background-color: #4caf50;
 }
 QMenuBar {
-    background-color: #1e2329;
+    background-color: #313338;
     color: #e0e0e0;
 }
 QMenuBar::item:selected {
-    background-color: #2a3038;
+    background-color: #232428;
 }
 QMenu {
-    background-color: #1e2329;
+    background-color: #313338;
     color: #e0e0e0;
     border: 1px solid #3a4149;
     border-radius: 6px;
@@ -96,7 +96,7 @@ QListWidget::item {
 }
 QScrollBar:vertical {
     border: none;
-    background-color: #2a3038;
+    background-color: #232428;
     width: 10px;
     margin: 0px 0px 0px 0px;
 }
@@ -110,7 +110,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 }
 QScrollBar:horizontal {
     border: none;
-    background-color: #2a3038;
+    background-color: #232428;
     height: 10px;
     margin: 0px 0px 0px 0px;
 }
