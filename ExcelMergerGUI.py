@@ -4,10 +4,10 @@ import os
 import pandas as pd
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QComboBox, QTextEdit, QProgressBar, QStatusBar, QTableView,
+                             QLineEdit, QPushButton, QComboBox, QTextEdit, QProgressBar, QStatusBar, QTableView, QGroupBox,
                              QFileDialog, QMessageBox, QSizePolicy, QDialog, QTreeView, QFileSystemModel, QListWidget, QMenu)
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QDropEvent, QStandardItemModel
-from PySide6.QtCore import QThread, Signal, QObject, QDir, Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import QThread, Signal, QObject, QDir, Qt, QAbstractTableModel, QModelIndex, QFile, QTextStream
 
 
 class PandasModel(QAbstractTableModel):
@@ -28,11 +28,11 @@ class PandasModel(QAbstractTableModel):
     
 
 class DraggableListWidget(QListWidget):
-    def __init__(self, program_output: QTextEdit, table_view: QTableView, parent=None):
+    def __init__(self, table_view: QTableView, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)  # Enable dropping on QLineEdit
         self.items_list = []
-        self.program_output = program_output
+
         self.table_view = table_view
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu_listbox)
@@ -64,11 +64,9 @@ class DraggableListWidget(QListWidget):
 
                 # Add the filename to the list display, but keep the full path in items_list
                 if not self.findItems(filename, Qt.MatchFixedString | Qt.MatchCaseSensitive):
-                    self.addItem(filename)  
-
-                self.update_listbox_items_count()
+                    self.addItem(filename)
             else:
-                self.program_output.setText("File already exists in the list.")
+                pass
         else:
             event.ignore()
             
@@ -76,7 +74,7 @@ class DraggableListWidget(QListWidget):
         context_menu = QMenu(self)
         delete_action = QAction("Delete Selected", self)
         delete_all_action = QAction("Delete All", self)
-        load_dataframe_action = QAction("Load Selected Dataframe", self)
+        load_dataframe_action = QAction("Load Into Table --->", self)
 
         context_menu.addAction(delete_action)
         context_menu.addAction(delete_all_action)
@@ -93,142 +91,167 @@ class DraggableListWidget(QListWidget):
         try:
             current_selected_item = self.currentRow()
             if current_selected_item != -1:
-                item_to_remove = self.takeItem(current_selected_item)
+                self.takeItem(current_selected_item)
                 self.items_list.pop(current_selected_item)
-                self.update_listbox_items_count()
-                self.program_output.append(f"Removed item: {item_to_remove.text()} at row {current_selected_item}")
-            else:
-                self.program_output.append("No item selected to delete.")
-        
         except IndexError:
-            self.program_output.append("Nothing to delete.")
+            QMessageBox.information(self, "No Item Selected", "Nothing to delete, fool.")
         except Exception as ex:
             message = f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}"
-            self.program_output.setText(f"Error removing selected item from list: {message}")
+            QMessageBox.critical(self, "Exception Error", f"Error removing selected item from list: {message}")
             
     def remove_all_items(self):
         try:
             if self.count() > 0:
                 self.items_list.clear()
                 self.clear()
-                self.program_output.setText("Deleted all items from the list.")
-            else:
-                self.program_output.setText("No items to delete.")
-                
-            self.update_listbox_items_count()
-            
+                QMessageBox.information(self, "Delete All", "All items have been deleted from the list.")
         except Exception as ex:
             message = f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}"
-            self.program_output.setText(f"Error removing selected all items from list: {message}")
-    
+            QMessageBox.critical(self, "Exception Error", f"Error removing selected all items from list: {message}")
     
     def load_excel_dataframe_into_table(self):
         try:
-            self.selected_item = self.items_list[self.currentRow()]
-            self.excel_filepath = self.selected_item
+            if self.currentRow() != -1:
+                self.selected_item = self.items_list[self.currentRow()]
+                self.excel_filepath = self.selected_item
+            
+                try:
+                    df = pd.read_excel(self.excel_filepath)
 
-            try:
-                df = pd.read_excel(self.excel_filepath)
+                    # Update the QTableView with the merged data
+                    model = PandasModel(df)
+                    self.table_view.setModel(model)
 
-                # Update the QTableView with the merged data
-                model = PandasModel(df)
-                self.table_view.setModel(model)
+                    QMessageBox.information(self,"Loaded Dataframe", f"Loaded the following excel file into the table: '{os.path.basename(self.excel_filepath)}'")
 
-                QMessageBox.information(self,"Loaded Dataframe", f"Loaded the following excel file into the table: '{os.path.basename(self.excel_filepath)}'")
-
-            except Exception as ex:
-                self.program_output.setText(f"Exception occurred: {str(ex)}")
+                except Exception as ex:
+                    QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
+            else:
+                QMessageBox.information(self,"No File Selected", "Nothing to load, fool.")
                 
         except IndexError as ix:
-            QMessageBox.critical(self, "Error", f"Error occurred while trying to load dataframe: {str(ix)}")
-            
-        
-    def update_listbox_items_count(self):
-        self.counter = self.count()
-        if self.counter != 0:
-            self.program_output.append(f"Total number of items in List: {self.counter}")
-    
+            QMessageBox.critical(self, "Error", f"An Error occurred while trying to load dataframe: {str(ix)}")
             
 class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Excel Merger")
-        self.setWindowIcon(QIcon("icon\\merge.ico"))
-        self.setGeometry(500, 250, 1000, 700)
+        self.setWindowIcon(QIcon("_internal\\icon\\merge.ico"))
+        self.setGeometry(500, 250, 1200, 900)
         self.saveGeometry()
-        self.program_output = QTextEdit()
         self.table_view = QTableView()
         self.table_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # Theme stuff
+        self.light_mode = QIcon("_internal\\imgs\\light.png")
+        self.dark_mode = QIcon("_internal\\imgs\\dark.png")
+        # Current theme to load on startup
+        self.current_theme = "_internal\\themes\\dark.qss"
+        
         self.initUI()
         
         # Create the menu bar
         self.create_menu_bar()
         
         # Apply the custom dark theme
-        self.apply_custom_dark_theme()
+        self.initialize_theme(self.current_theme)
+
         
     def initUI(self):
-        
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        
-        # ListBox and Tree View
-        listbox_and_treeview_layout = QHBoxLayout()
+        main_layout = QHBoxLayout(central_widget)
 
-        # Left side: ListBox Element
-        listbox_vertical_layout = QVBoxLayout()
-        listbox_horizontal_layout = QHBoxLayout()
-        self.listbox_label = QLabel("List Box View:")
-        self.listbox = DraggableListWidget(self.program_output, self.table_view)
-        listbox_vertical_layout.addWidget(self.listbox_label)
-        listbox_vertical_layout.addWidget(self.listbox)
-        listbox_vertical_layout.addLayout(listbox_horizontal_layout)
+        # Left side layout
+        left_layout = QVBoxLayout()
+
+        # ListBox GroupBox
+        listbox_group = QGroupBox("List Box View")
+        listbox_layout = QVBoxLayout()
+        self.listbox = DraggableListWidget(self.table_view)
+        listbox_layout.addWidget(self.listbox)
+        listbox_group.setLayout(listbox_layout)
+
+        # Tree View GroupBox
+        treeview_group = QGroupBox("Tree View")
+        treeview_layout = QVBoxLayout()
+        self.tree_view = QTreeView(self)
+        self.tree_view.setDragEnabled(True)  # Enable dragging
+        treeview_layout.addWidget(self.tree_view)
+
+        treeview_input_layout = QHBoxLayout()
+
+        self.button_browse_new_filesystem = QPushButton("Browse")
+        self.button_browse_new_filesystem.clicked.connect(self.load_new_filesystem_path)
+        treeview_input_layout.addWidget(self.button_browse_new_filesystem)
+        treeview_layout.addLayout(treeview_input_layout)
+        treeview_group.setLayout(treeview_layout)
+
+        # Columns GroupBox
+        columns_group = QGroupBox("Excel Columns")
+        columns_layout_v = QVBoxLayout()
+        columns_layout = QHBoxLayout()
+        columns_layout_to_merge = QHBoxLayout()
+        excel_input_layout = QHBoxLayout()
+
         self.input_path_main_excel_file = QLineEdit()
         self.input_path_main_excel_file.setPlaceholderText("Select the excel files to which all data will be merged to...")
         self.button_browse_main_excel_file = QPushButton("Browse")
         self.button_browse_main_excel_file.clicked.connect(self.browse_path_to_main_excel_file)
+        excel_input_layout.addWidget(self.input_path_main_excel_file)
+        excel_input_layout.addWidget(self.button_browse_main_excel_file)
+
         self.button_merge = QPushButton("Merge")
         self.button_merge.clicked.connect(lambda: self.start_merging_data(self.input_path_main_excel_file.text(), self.get_listbox_items()))
-        listbox_horizontal_layout.addWidget(self.input_path_main_excel_file)
-        listbox_horizontal_layout.addWidget(self.button_browse_main_excel_file)
-        listbox_vertical_layout.addWidget(self.button_merge)
-        
-        program_output_layout = QVBoxLayout()
-        
-        self.program_output_label = QLabel("Program Output:")
-        self.program_output.setReadOnly(True)
-        self.table_view_label = QLabel("Table View:")
-        program_output_layout.addWidget(self.table_view_label)
-        program_output_layout.addWidget(self.table_view)
-        program_output_layout.addWidget(self.program_output_label)
-        program_output_layout.addWidget(self.program_output)
 
-        # Right side: Tree View
-        tree_view_vertical_layout = QVBoxLayout()
-        self.tree_view_label = QLabel("Tree View:")
-        self.tree_view = QTreeView(self)
-        self.tree_view.setDragEnabled(True)  # Enable dragging
-        tree_view_horizontal_layout = QHBoxLayout()
-        self.new_filesystem_input = QLineEdit()
-        self.new_filesystem_input.setPlaceholderText("Select a path to the excel files for merging...")
-        self.button_browse_new_filesystem = QPushButton("Browse")
-        self.button_browse_new_filesystem.clicked.connect(self.load_new_filesystem_path)
-        tree_view_vertical_layout.addWidget(self.tree_view_label)
-        tree_view_vertical_layout.addWidget(self.tree_view)
-        tree_view_horizontal_layout.addWidget(self.new_filesystem_input)
-        tree_view_horizontal_layout.addWidget(self.button_browse_new_filesystem)
-        tree_view_vertical_layout.addLayout(tree_view_horizontal_layout)
+        # Main Excel Widgets
+        self.main_excel_label = QLabel("Load columns from main excel file:")
+        self.main_excel_column_combobox = QComboBox()
+        self.main_excel_load_column_button = QPushButton("Load Columns")
+        self.main_excel_load_column_button.clicked.connect(self.load_main_excel_columns)
 
-        # Add both vertical layouts to the horizontal layout
-        listbox_and_treeview_layout.addLayout(listbox_vertical_layout)
-        listbox_and_treeview_layout.addLayout(tree_view_vertical_layout)
+        # Secondary Excel Files
+        self.to_merge_excel_label = QLabel("Load columns from other excel file:")
+        self.to_merge_excel_column_combobox = QComboBox()
+        self.to_merge_load_column_button = QPushButton("Load Columns")
+        self.to_merge_load_column_button.clicked.connect(self.load_to_merge_excel_columns)
 
-        # Add the horizontal layout to the main vertical layout
-        layout.addLayout(listbox_and_treeview_layout)
-        layout.addLayout(program_output_layout) # Added program output as last element
-        
+        columns_layout.addWidget(self.main_excel_label)
+        columns_layout.addWidget(self.main_excel_column_combobox)
+        columns_layout.addWidget(self.main_excel_load_column_button)
+
+        columns_layout_to_merge.addWidget(self.to_merge_excel_label)
+        columns_layout_to_merge.addWidget(self.to_merge_excel_column_combobox)
+        columns_layout_to_merge.addWidget(self.to_merge_load_column_button)
+
+        columns_layout_v.addLayout(columns_layout)
+        columns_layout_v.addLayout(columns_layout_to_merge)
+        columns_layout_v.addLayout(excel_input_layout)
+        columns_layout_v.addWidget(self.button_merge)
+        columns_group.setLayout(columns_layout_v)
+
+        # Add GroupBoxes to left layout
+        left_layout.addWidget(treeview_group)
+        left_layout.addWidget(listbox_group)
+        left_layout.addWidget(columns_group)
+
+        # Add left layout to main layout
+        main_layout.addLayout(left_layout)
+
+        # Right side: QTableView GroupBox
+        table_group = QGroupBox("Table View")
+        table_layout = QVBoxLayout()
+        table_layout.addWidget(self.table_view)
+        table_group.setLayout(table_layout)
+
+        # Add the table group to a vertical layout
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(table_group)
+
+        # Add right layout to the main layout
+        main_layout.addLayout(right_layout)
+
         # Set up the file system model
         self.file_system_model = QFileSystemModel(self)
         self.file_system_model.setRootPath("")  # Set root path to the filesystem's root
@@ -242,6 +265,7 @@ class MainWindow(QMainWindow):
         self.tree_view.setColumnWidth(0, 250)  # Adjust column width
         self.tree_view.setHeaderHidden(False)   # Show the header
         self.tree_view.setSortingEnabled(True)  # Enable sorting
+
         
      # ============ Methods for the MainWindow Class ============ # 
      
@@ -250,11 +274,6 @@ class MainWindow(QMainWindow):
         
          # File Menu
         file_menu = menu_bar.addMenu("&File")
-        clear_action = QAction("Clear Output", self)
-        clear_action.setStatusTip("Clear the program output")
-        clear_action.triggered.connect(self.clear_output)
-        file_menu.addAction(clear_action)
-        file_menu.addSeparator()
         exit_action = QAction("E&xit", self)
         exit_action.setStatusTip("Exit the application")
         exit_action.triggered.connect(self.close)
@@ -269,10 +288,26 @@ class MainWindow(QMainWindow):
         open_output_action = QAction("Open Output Folder ", self)
         open_output_action.setStatusTip("Opens the output folder")
         #open_output_action.triggered.connect(self.open_output_folder)
-        open_menu.addAction(open_output_action)   
+        open_menu.addAction(open_output_action)
+        
+        # Change Theme Toggle
+        self.toggle_theme_action = menu_bar.addAction(self.light_mode, "Toggle Theme")
+        self.toggle_theme_action.triggered.connect(self.change_theme)
+        
+    def change_theme(self):
+        if self.current_theme == "_internal\\themes\\dark.qss":
+            self.current_theme = "_internal\\themes\\light.qss"
+            self.toggle_theme_action.setIcon(self.dark_mode)
+            self.toggle_theme_action.setText("Toggle Theme")
+        else:
+            self.current_theme = "_internal\\themes\\dark.qss"
+            self.toggle_theme_action.setIcon(self.light_mode)
+            self.toggle_theme_action.setText("Toggle Theme")
+            
+        self.initialize_theme(self.current_theme)
         
     def closeEvent(self, event: QCloseEvent):
-        reply = QMessageBox.question(self, "Exit Program", "Are you sure you want to exit the   program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(self, "Exit Program", "Are you sure you want to exit the program?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
      
         if reply == QMessageBox.Yes:
             event.accept()
@@ -281,23 +316,17 @@ class MainWindow(QMainWindow):
     
     # Method - Load new filesystem path into the TreeView element.
     def load_new_filesystem_path(self):
-        
         folder = QFileDialog.getExistingDirectory(self, "Select Directory")
         if folder:
-            self.new_filesystem_input.setText(folder)
-            
-        try:
-            folder_path = self.new_filesystem_input.text()
-            if folder_path and QDir(folder_path).exists():
-                self.file_system_model.setRootPath(folder_path)
-                self.tree_view.setRootIndex(self.file_system_model.index(folder_path))
-                self.program_output.setText(f"Tree View updated to the following path: {folder_path}")
-                self.new_filesystem_input.clear()
-            else:
-                pass
-        except Exception as ex:
-            self.program_output.setText(f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}")
-    
+            try:
+                self.file_system_model.setRootPath(folder)
+                self.tree_view.setRootIndex(self.file_system_model.index(folder))
+                QMessageBox.information(self, "Updated Path", f"Tree View updated to the following path: {folder}")
+            except Exception as ex:
+                QMessageBox.critical(self, "Exception Error", f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}")
+        else:
+            pass
+        
     def browse_path_to_main_excel_file(self):
         
         options = QFileDialog.Options()
@@ -305,18 +334,74 @@ class MainWindow(QMainWindow):
         file, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
         if file:
             self.input_path_main_excel_file.setText(file)
-    
-    def clear_output(self):
-        self.program_output.clear()
         
     def get_listbox_items(self):
         # Directly access the items_list from the DraggableListWidget instance
         items = self.listbox.items_list
         return items
+
+    def initialize_theme(self, theme_file):
+        try:
+            file = QFile(theme_file)
+            if file.open(QFile.ReadOnly | QFile.Text):
+                stream = QTextStream(file)
+                stylesheet = stream.readAll()
+                self.setStyleSheet(stylesheet)
+            file.close()
+        except Exception as ex:
+            QMessageBox.critical(self, "Theme load error", f"Failed to load theme: {str(ex)}")
+            
+    # Methods for Loading Columns from Excel Files
+    
+        # Load all Columns from the Main Excel Files which the values will be merged to
+    def load_main_excel_columns(self):
+        try:
+            options = QFileDialog.Options()
+            file, _ = QFileDialog.getOpenFileName(self, "Select Main Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
+            excel_file = file
+            
+            if Path(excel_file).is_file():
+                main_df = pd.read_excel(excel_file)
+                self.main_excel_column_combobox.clear()
+                self.main_excel_column_combobox.addItems(main_df.columns)
+                QMessageBox.information(self,"Columns Loaded","Successfully loaded all columns into the ComboBox.")
+            else:
+                QMessageBox.information(self, "Cannot Load File","Cannot load excel file.")
+            
+        except Exception as ex:
+            QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
+            
+    def load_to_merge_excel_columns(self):
+        try:
+            options = QFileDialog.Options()
+            file, _ = QFileDialog.getOpenFileName(self, "Select Main Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
+            excel_file = file
+            
+            if Path(excel_file).is_file():
+                main_df = pd.read_excel(excel_file)
+                self.main_excel_column_combobox.clear()
+                self.main_excel_column_combobox.addItems(main_df.columns)
+                QMessageBox.information(self,"Columns Loaded","Successfully loaded all columns into the ComboBox.")
+            else:
+                QMessageBox.information(self, "Cannot Load File","Cannot load excel file.")
+        except Exception as ex:
+            QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
         
     def start_merging_data(self, main_excel_file_path, list_of_excel_files_to_merge):
+        """
+        Create Two Inputs where the columns get loaded, in one is the value of the excel file to merge and the second input is with what to replace the value from the first column
+        Compare two excels on the same column value - they need to be 1:1 or it won't work I think?
+
+        Args:
+            main_excel_file_path (_type_): _description_
+            list_of_excel_files_to_merge (_type_): _description_
+
+        Raises:
+            ValueError: _description_
+            ValueError: _description_
+            ValueError: _description_
+        """
         try:
-            self.program_output.setText(f"Merging data to {os.path.basename(main_excel_file_path)}...")
             if self.listbox.count() > 0:
                 if os.path.isfile(main_excel_file_path):
                     main_df = pd.read_excel(main_excel_file_path)
@@ -349,119 +434,15 @@ class MainWindow(QMainWindow):
                     updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
                     main_df.to_excel(updated_file_path, index=False)
 
-                    self.program_output.setText(f"Updated file saved as: {updated_file_path}")
+                    QMessageBox.information(self, "Merging Finished", f"Updated file saved as: {updated_file_path}")
                 else:
-                    self.program_output.setText("No excel file selected.")
+                    QMessageBox.information(self, "No Excel File", "No excel file selected.")
             else:
-                self.program_output.setText("Listbox does not contain any items.")
+                QMessageBox.information(self, "ListBox is Empty", "ListBox does not contain any excel files for merging.")
                 
         except Exception as ex:
             message = f"An exception of type {type(ex).__name__} occurred. Arguments: {ex.args!r}"
-            self.program_output.setText(f"Error merging data: {message}")
-            
-    def apply_custom_dark_theme(self):
-        self.setStyleSheet("""
-        QMainWindow, QWidget {
-            background-color: #1e2329;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', 'Roboto', sans-serif;
-            font-size: 12px;
-        }
-        QLabel {
-            color: #e0e0e0;
-            font-weight: 500;
-            font: bold;
-        }
-        QLineEdit, QTextEdit, QTreeView {
-            background-color: #2a3038;
-            border: 1px solid #3a4149;
-            border-radius: 6px;
-            padding: 8px;
-            color: #e0e0e0;
-        }
-        QLineEdit:focus, QTextEdit:focus, QTreeView:focus {
-            border-color: #4caf50;
-            background-color: #2f363f;
-        }
-        QPushButton {
-            background-color: #4caf50;
-            color: #ffffff;
-            border-radius: 6px;
-            padding: 10px 16px;
-            font-weight: 600;
-            min-width: 100px;
-        }
-        QPushButton:hover {
-            background-color: #45a049;
-            color: #000000;
-        }
-        QPushButton:pressed {
-            background-color: #3d8b40;
-        }
-        QPushButton:disabled {
-            background-color: #5c6370;
-            color: #9da5b4;
-        }
-        QTreeView::item:selected, QListWidget::item:selected {
-            background-color: #4caf50;
-        }
-        QMenuBar {
-            border-bottom: 2px solid #4caf50;
-            background-color: #1e2329;
-            color: #e0e0e0;
-        }
-        QMenuBar::item:selected {
-            background-color: #2a3038;
-        }
-        QMenu {
-            background-color: #1e2329;
-            color: #e0e0e0;
-            border: 1px solid #3a4149;
-            border-radius: 6px;
-        }
-        QMenu::item:selected {
-            background-color: #4caf50;
-        }
-        QStatusBar {
-            background-color: #171b20;
-            color: #e0e0e0;
-        }
-        QListWidget {
-            background-color: #2a3038;
-            color: #e0e0e0;
-        }
-        QListWidget::item {
-            height: 32px;
-        }
-        QScrollBar:vertical {
-            border: none;
-            background-color: #2a3038;
-            width: 10px;
-            margin: 0px 0px 0px 0px;
-        }
-        QScrollBar::handle:vertical {
-            background-color: #4caf50;
-            min-height: 30px;
-            border-radius: 5px;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            height: 0px;
-        }
-        QScrollBar:horizontal {
-            border: none;
-            background-color: #2a3038;
-            height: 10px;
-            margin: 0px 0px 0px 0px;
-        }
-        QScrollBar::handle:horizontal {
-            background-color: #4caf50;
-            min-width: 30px;
-            border-radius: 5px;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            width: 0px;
-        }
-        """)
+            QMessageBox.critical(self, "Exception Error", f"Error merging data: {message}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
