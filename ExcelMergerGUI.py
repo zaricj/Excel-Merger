@@ -192,7 +192,8 @@ class MainWindow(QMainWindow):
         columns_group = QGroupBox("Excel Columns")
         columns_layout_v = QVBoxLayout()
         columns_layout = QHBoxLayout()
-        columns_layout_to_merge = QHBoxLayout()
+        columns_load_button_layout = QHBoxLayout()
+        columns_merge_layout = QHBoxLayout()
         find_and_replace_layout = QHBoxLayout()
         excel_input_layout = QHBoxLayout()
 
@@ -207,16 +208,21 @@ class MainWindow(QMainWindow):
         self.button_merge.clicked.connect(lambda: self.start_merging_data(self.input_path_main_excel_file.text(), self.get_listbox_items()))
 
         # Main Excel Widgets
-        self.main_excel_label = QLabel("Load columns from main excel file:")
+        self.main_excel_label = QLabel("Compare and match values from column")
         self.main_excel_column_combobox = QComboBox()
-        self.main_excel_load_column_button = QPushButton("Load Columns")
+        self.main_excel_column_combobox.setEditable(True)
+        self.main_excel_label_two = QLabel("against values in column")
+        self.to_compare_excel_column_combobox = QComboBox()
+        self.to_compare_excel_column_combobox.setEditable(True)
+        
+        self.main_excel_load_column_button = QPushButton("Load Main Columns")
         self.main_excel_load_column_button.clicked.connect(self.load_main_excel_columns)
-
-        # Secondary Excel Files
-        self.to_merge_excel_label = QLabel("Load columns from other excel file:")
-        self.to_merge_excel_column_combobox = QComboBox()
-        self.to_merge_load_column_button = QPushButton("Load Columns")
-        self.to_merge_load_column_button.clicked.connect(self.load_to_merge_excel_columns)
+        self.to_compare_load_columns_button = QPushButton("Load Other Columns")
+        self.to_compare_load_columns_button.clicked.connect(self.load_to_compare_excel_columns)
+        
+        self.merge_value_label = QLabel("Merge the following column:")
+        self.merge_value_combobox = QComboBox()
+        self.merge_value_combobox.setEditable(True)
         
         # Find and Replace
         self.find_input = QLineEdit()
@@ -228,11 +234,14 @@ class MainWindow(QMainWindow):
 
         columns_layout.addWidget(self.main_excel_label)
         columns_layout.addWidget(self.main_excel_column_combobox)
-        columns_layout.addWidget(self.main_excel_load_column_button)
+        columns_layout.addWidget(self.main_excel_label_two)
+        columns_layout.addWidget(self.to_compare_excel_column_combobox)
 
-        columns_layout_to_merge.addWidget(self.to_merge_excel_label)
-        columns_layout_to_merge.addWidget(self.to_merge_excel_column_combobox)
-        columns_layout_to_merge.addWidget(self.to_merge_load_column_button)
+        columns_load_button_layout.addWidget(self.main_excel_load_column_button)
+        columns_load_button_layout.addWidget(self.to_compare_load_columns_button)
+        
+        columns_merge_layout.addWidget(self.merge_value_label)
+        columns_merge_layout.addWidget(self.merge_value_combobox)
         
         find_and_replace_layout.addWidget(find_label)
         find_and_replace_layout.addWidget(self.find_input)
@@ -240,7 +249,8 @@ class MainWindow(QMainWindow):
         find_and_replace_layout.addWidget(self.replace_input)
 
         columns_layout_v.addLayout(columns_layout)
-        columns_layout_v.addLayout(columns_layout_to_merge)
+        columns_layout_v.addLayout(columns_load_button_layout)
+        columns_layout_v.addLayout(columns_merge_layout)
         columns_layout_v.addLayout(find_and_replace_layout)
         columns_layout_v.addLayout(excel_input_layout)
         columns_layout_v.addWidget(self.button_merge)
@@ -387,7 +397,7 @@ class MainWindow(QMainWindow):
         except Exception as ex:
             QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
             
-    def load_to_merge_excel_columns(self):
+    def load_to_compare_excel_columns(self):
         try:
             options = QFileDialog.Options()
             file, _ = QFileDialog.getOpenFileName(self, "Select Main Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
@@ -395,8 +405,10 @@ class MainWindow(QMainWindow):
             
             if Path(excel_file).is_file():
                 main_df = pd.read_excel(excel_file)
-                self.to_merge_excel_column_combobox.clear()
-                self.to_merge_excel_column_combobox.addItems(main_df.columns)
+                self.to_compare_excel_column_combobox.clear()
+                self.merge_value_combobox.clear()
+                self.to_compare_excel_column_combobox.addItems(main_df.columns)
+                self.merge_value_combobox.addItems(main_df.columns)
                 QMessageBox.information(self,"Columns Loaded","Successfully loaded all columns into the ComboBox.")
             else:
                 QMessageBox.information(self, "Cannot Load File","Cannot load excel file.")
@@ -422,34 +434,33 @@ class MainWindow(QMainWindow):
                 main_df = pd.read_excel(main_excel_file_path)
 
                 # Get selected key columns
-                main_key = self.main_excel_column_combobox.currentText()
-                other_key = self.to_merge_excel_column_combobox.currentText()
-                #//TODO FInish Code --- Check logic_merging.py
+                main_df_key = self.main_excel_column_combobox.currentText()
+                to_compare_df_key = self.to_compare_excel_column_combobox.currentText()
+                value_to_merge_key = self.merge_value_combobox.currentText()
+                #//TODO FInish Code
                 
-                if not main_key or not other_key:
-                    QMessageBox.warning(self, "Warning", "Please select a valid key column from both files!")
+                if not main_df_key or not to_compare_df_key or not value_to_merge_key:
+                    QMessageBox.warning(self, "Warning", "Please select valid keys for the columns from both files!")
                     return
 
                 for excel_file in list_of_excel_files_to_merge: 
                     excel_file_df = pd.read_excel(excel_file)
+                    excel_filename = os.path.splitext(excel_file)[0]
                     
-                    merged_df = main_df.merge(excel_file_df[other_key], left_on=main_key, right_on=other_key, how='left')
-
-                    # Ensure 'Profile' and the value column exist in the month file
-                    if other_key not in excel_file_df.columns:
-                        raise ValueError(f"File {excel_file} must have the column '{other_key}'")
-
-                    # Apply find and replace logic if Profile matches
-                    find_value = self.find_input.text()
-                    replace_value = self.replace_input.text()
+                    if to_compare_df_key not in excel_file_df.columns:
+                        raise ValueError(f"File {excel_file} column mismatch.")
+                    if value_to_merge_key not in excel_file_df.columns:
+                        raise ValueError(f"File {excel_file} column mismatch.")
                     
-                    if find_value and replace_value:
-                        # Perform the replacement only if "Profile" values match
-                        merged_df.loc[merged_df[main_key] == merged_df[main_key], other_key] = merged_df[other_key].replace(find_value, replace_value)
+                    merged_df = main_df.merge(excel_file_df[[to_compare_df_key, value_to_merge_key]], on=main_df_key, how="left")
+                    
+                    # Replace values with Find-Replace inputs
+                    merged_df[excel_filename] = merged_df[value_to_merge_key].apply(lambda x=self.find_input.text(): self.replace_input.text() if x == self.find_input.text() else "-")
 
-                    # Drop the temporary 'Value' column after merging
-                    main_df = merged_df.drop(columns=[other_key])
-
+                    
+                    # Drop the temporary column after merging
+                    main_df = merged_df.drop(columns=[value_to_merge_key])
+                    
                 updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
                 main_df.to_excel(updated_file_path, index=False)
 
