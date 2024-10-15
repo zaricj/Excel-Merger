@@ -24,6 +24,7 @@ QComboBox {
     border: 1px solid #cccccc;
     padding: 1px;
     border-radius: 4px;
+    font: bold;
 }
 QComboBox::drop-down {
     border: none;
@@ -53,9 +54,6 @@ QPushButton {
     padding: 6px 8px;
     font-weight: 500;
     min-width: 50px;
-}
-QComboBox {
-    font: 12px bold;
 }
 QPushButton:hover {
     background-color: #45a049;

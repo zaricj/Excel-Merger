@@ -24,6 +24,7 @@ QComboBox {
     border: 1px solid #000000;
     padding: 1px;
     border-radius: 4px;
+    font: bold;
 }
 QComboBox::drop-down {
     border: none;

@@ -51,24 +51,24 @@ class DraggableListWidget(QListWidget):
 
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasUrls():
-            # Extract the file path from the drop event
-            file_path = event.mimeData().urls()[0].toLocalFile()
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
 
-            # Append the full file path to items_list for later use
-            if file_path not in self.items_list:
-                self.items_list.append(file_path)
-                event.acceptProposedAction()  # Accept the drop event   
+                # Append the full file path to items_list for later use
+                if file_path not in self.items_list:
+                    self.items_list.append(file_path)
 
-                # Get the filename from the full path
-                filename = os.path.basename(file_path)
+                    # Get the filename from the full path
+                    filename = os.path.basename(file_path)
 
-                # Add the filename to the list display, but keep the full path in items_list
-                if not self.findItems(filename, Qt.MatchFixedString | Qt.MatchCaseSensitive):
-                    self.addItem(filename)
-            else:
-                pass
+                    # Add the filename to the list display, but keep the full path in items_list
+                    if not self.findItems(filename, Qt.MatchFixedString | Qt.MatchCaseSensitive):
+                        self.addItem(filename)
+
+            event.acceptProposedAction()  # Accept the drop event
         else:
             event.ignore()
+
             
     def show_context_menu_listbox(self, position):
         context_menu = QMenu(self)
@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
         self.to_compare_load_columns_button = QPushButton("Load Other Columns")
         self.to_compare_load_columns_button.clicked.connect(self.load_to_compare_excel_columns)
         
-        self.merge_value_label = QLabel("Merge the following column:")
+        self.merge_value_label = QLabel("Merge the following column on the main excel file:")
         self.merge_value_combobox = QComboBox()
         self.merge_value_combobox.setEditable(True)
         
@@ -416,16 +416,13 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Exception Error", f"An exception occurred: {str(ex)}")
         
     def start_merging_data(self, main_excel_file_path=None, list_of_excel_files_to_merge=None):
-        """
-        Create Two Inputs where the columns get loaded, in one is the value of the excel file to merge and the second input is with what to replace the value from the first column
-        Compare two excels on the same column value - they need to be 1:1 or it won't work I think?
+        """_summary_
 
         Args:
-            main_excel_file_path (_type_): _description_
-            list_of_excel_files_to_merge (_type_): _description_
+            main_excel_file_path (_type_, optional): _description_. Defaults to None.
+            list_of_excel_files_to_merge (_type_, optional): _description_. Defaults to None.
 
         Raises:
-            ValueError: _description_
             ValueError: _description_
             ValueError: _description_
         """
@@ -437,15 +434,15 @@ class MainWindow(QMainWindow):
                 main_df_key = self.main_excel_column_combobox.currentText()
                 to_compare_df_key = self.to_compare_excel_column_combobox.currentText()
                 value_to_merge_key = self.merge_value_combobox.currentText()
-                #//TODO FInish Code
                 
                 if not main_df_key or not to_compare_df_key or not value_to_merge_key:
                     QMessageBox.warning(self, "Warning", "Please select valid keys for the columns from both files!")
                     return
 
                 for excel_file in list_of_excel_files_to_merge: 
-                    excel_file_df = pd.read_excel(excel_file)
-                    excel_filename = os.path.splitext(excel_file)[0]
+                    excel_file_read = pd.read_excel(excel_file)
+                    excel_file_df = excel_file_read.astype(str)
+                    excel_filename = os.path.basename(excel_file)
                     
                     if to_compare_df_key not in excel_file_df.columns:
                         raise ValueError(f"File {excel_file} column mismatch.")
@@ -454,12 +451,20 @@ class MainWindow(QMainWindow):
                     
                     merged_df = main_df.merge(excel_file_df[[to_compare_df_key, value_to_merge_key]], on=main_df_key, how="left")
                     
-                    # Replace values with Find-Replace inputs
-                    merged_df[excel_filename] = merged_df[value_to_merge_key].apply(lambda x=self.find_input.text(): self.replace_input.text() if x == self.find_input.text() else "-")
-
+                    # Apply find and replace logic if Profile matches
+                    find_value = self.find_input.text()
+                    replace_value = self.replace_input.text() #//TODO (11.10.2024 19:28) Add comma-seperated multi pattern search for find-replace function
                     
-                    # Drop the temporary column after merging
-                    main_df = merged_df.drop(columns=[value_to_merge_key])
+                    if find_value and replace_value:
+                        # Perform the replacement only if "Profile" values match
+                        #merged_df.loc[merged_df[main_df_key] == merged_df[main_df_key], to_compare_df_key] = merged_df[to_compare_df_key].replace(find_value, replace_value)
+                    
+                        # Replace values with Find-Replace inputs
+                        merged_df[excel_filename] = merged_df[value_to_merge_key].apply(lambda x: replace_value if x == find_value else "-")
+                        merged_df.fillna({excel_filename: "?"}, inplace=True) # Fill non matches with ?
+
+                        # Drop the temporary column after merging
+                        main_df = merged_df.drop(columns=[value_to_merge_key])
                     
                 updated_file_path = os.path.splitext(main_excel_file_path)[0] + '_updated.xlsx'
                 main_df.to_excel(updated_file_path, index=False)
