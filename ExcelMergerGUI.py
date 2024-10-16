@@ -4,10 +4,10 @@ from pathlib import Path
 import pandas as pd
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QComboBox, QTextEdit, QProgressBar, QStatusBar, QTableView, QGroupBox,
-                             QFileDialog, QMessageBox, QSizePolicy, QDialog, QTreeView, QFileSystemModel, QListWidget, QMenu)
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QDropEvent, QStandardItemModel
-from PySide6.QtCore import QThread, Signal, QObject, QDir, Qt, QAbstractTableModel, QModelIndex, QFile, QTextStream
+                             QLineEdit, QPushButton, QComboBox, QTableView, QGroupBox,
+                             QFileDialog, QMessageBox, QSizePolicy, QTreeView, QFileSystemModel, QListWidget, QMenu)
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QDropEvent
+from PySide6.QtCore import QDir, Qt, QAbstractTableModel, QFile, QTextStream
 
 
 class PandasModel(QAbstractTableModel):
